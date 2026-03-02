@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIRROR — Pattern Memory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;1,400;1,600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:      #F4F1EC;
+            --surface: #FDFCF9;
+            --ink:     #1A1825;
+            --line:    #D6D1C8;
+            --line-2:  #E8E4DC;
+            --dim:     #A09A90;
+            --red:     #C94040;
+            --green:   #2D7D5C;
+            --amber:   #C87820;
+        }
+
+        body {
+            background: var(--bg);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'DM Mono', monospace;
+            color: var(--ink);
+            padding: 2rem 1rem;
+        }
+
+        /* subtle grid paper texture */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--line-2) 1px, transparent 1px),
+                linear-gradient(90deg, var(--line-2) 1px, transparent 1px);
+            background-size: 28px 28px;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.5;
+        }
+
+        .wrapper {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 560px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.6rem;
+            animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ─── Header ─── */
+        .title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: clamp(3rem, 12vw, 5rem);
+            font-weight: 600;
+            font-style: italic;
+            letter-spacing: 0.05em;
+            color: var(--ink);
+            line-height: 1;
+            text-align: center;
+        }
+
+        .tagline {
+            font-size: 0.55rem;
+            letter-spacing: 0.38em;
+            text-transform: uppercase;
+            color: var(--dim);
+            text-align: center;
+            margin-top: 0.3rem;
+        }
+
+        /* ─── Score bar ─── */
+        .scorebar {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .score-item { text-align: center; }
+
+        .score-label {
+            font-size: 0.5rem;
+            letter-spacing: 0.35em;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin-bottom: 0.15rem;
+        }
+
+        .score-val {
+            font-size: 1.8rem;
+            font-weight: 400;
+            line-height: 1;
+            color: var(--ink);
+            transition: color 0.3s;
+        }
+
+        .score-sep {
+            width: 1px;
+            height: 36px;
+            background: var(--line);
+        }
+
+        /* ─── Arena ─── */
+        .arena {
+            display: flex;
+            align-items: flex-start;
+            gap: 0;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.55rem;
+            flex: 1;
+        }
+
+        .panel-label {
+            font-size: 0.5rem;
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            color: var(--dim);
+        }
+
+        .divider-v {
+            width: 1px;
+            background: var(--line);
+            align-self: stretch;
+            margin: 0 1.5rem;
+            margin-top: 1.6rem; /* align with grid */
+        }
+
+        /* ─── Grid ─── */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 3px;
+            background: var(--line);
+            border: 1px solid var(--line);
+            width: 100%;
+            max-width: 220px;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            background: var(--surface);
+            position: relative;
+            overflow: hidden;
+            transition: background 0.1s;
+        }
+
+        /* Pattern cells — ink fill */
+        .cell.lit {
+            background: var(--ink);
+            animation: inkDrop 0.2s cubic-bezier(0.34,1.56,0.64,1) both;
+        }
+
+        @keyframes inkDrop {
+            from { transform: scale(0.4); opacity: 0; border-radius: 50%; }
+            to   { transform: scale(1);   opacity: 1; border-radius: 0; }
+        }
+
+        /* Pattern hidden during recall */
+        .cell.hidden-lit { background: var(--surface); }
+
+        /* Player cells */
+        .cell.player-lit {
+            background: var(--ink);
+            animation: cellClick 0.15s cubic-bezier(0.34,1.56,0.64,1) both;
+        }
+
+        @keyframes cellClick {
+            from { transform: scale(0.7); }
+            to   { transform: scale(1); }
+        }
+
+        .player-grid .cell {
+            cursor: pointer;
+        }
+        .player-grid .cell:hover:not(.player-lit):not(.disabled) {
+            background: var(--line-2);
+        }
+        .player-grid.disabled .cell { cursor: default; }
+
+        /* Result states */
+        .cell.correct {
+            background: var(--green) !important;
+            animation: correctFlash 0.4s ease both;
+        }
+        .cell.wrong {
+            background: var(--red) !important;
+            animation: wrongFlash 0.4s ease both;
+        }
+        .cell.missed {
+            background: var(--amber) !important;
+            animation: wrongFlash 0.4s ease both;
+        }
+
+        @keyframes correctFlash {
+            0%   { transform: scale(0.9); }
+            50%  { transform: scale(1.08); }
+            100% { transform: scale(1); }
+        }
+        @keyframes wrongFlash {
+            0%,20%,40%,60% { transform: translateX(-2px); }
+            10%,30%,50%    { transform: translateX(2px); }
+            100%           { transform: translateX(0); }
+        }
+
+        /* ─── Timer bar ─── */
+        .timer-wrap {
+            width: 100%;
+            max-width: 460px;
+            height: 3px;
+            background: var(--line);
+            border-radius: 2px;
+            overflow: hidden;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .timer-wrap.visible { opacity: 1; }
+
+        .timer-bar {
+            height: 100%;
+            width: 100%;
+            background: var(--ink);
+            border-radius: 2px;
+            transform-origin: left;
+            transition: width linear;
+        }
+
+        /* ─── Status ─── */
+        .status {
+            font-size: 0.65rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--dim);
+            text-align: center;
+            min-height: 1.2em;
+            transition: color 0.2s;
+        }
+        .status.s-memorize { color: var(--amber); }
+        .status.s-recall   { color: var(--ink); }
+        .status.s-correct  { color: var(--green); }
+        .status.s-wrong    { color: var(--red); }
+
+        /* ─── Buttons ─── */
+        .actions { display: flex; gap: 0.75rem; }
+
+        .btn {
+            font-family: 'DM Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 400;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            padding: 0.7rem 2rem;
+            border: 1px solid var(--ink);
+            background: transparent;
+            color: var(--ink);
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, transform 0.1s;
+        }
+
+        .btn:hover { background: var(--ink); color: var(--surface); }
+        .btn:active { transform: scale(0.96); }
+        .btn.hidden { display: none; }
+
+        .btn.btn-check {
+            border-color: var(--ink);
+        }
+        .btn.btn-check:hover { background: var(--ink); color: var(--surface); }
+
+        /* ─── Game over overlay ─── */
+        .go-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(244,241,236,0.92);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            z-index: 100;
+            animation: fadeIn 0.35s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+        .go-label {
+            font-size: 0.55rem;
+            letter-spacing: 0.45em;
+            text-transform: uppercase;
+            color: var(--dim);
+        }
+
+        .go-score {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 7rem;
+            font-weight: 600;
+            font-style: italic;
+            line-height: 1;
+            color: var(--ink);
+        }
+
+        .go-sub {
+            font-size: 0.58rem;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin-bottom: 1.5rem;
+        }
+        .go-sub.new { color: var(--amber); }
+
+        /* ─── Mobile ─── */
+        @media (max-width: 480px) {
+            .arena { flex-direction: column; align-items: center; gap: 1.2rem; }
+            .divider-v { display: none; }
+            .grid { max-width: 200px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+
+    <div>
+        <h1 class="title"><em>Mirror</em></h1>
+        <p class="tagline">Pattern Memory · Recreate what you see</p>
+    </div>
+
+    <div class="scorebar">
+        <div class="score-item">
+            <div class="score-label">Round</div>
+            <div class="score-val" id="valRound">—</div>
+        </div>
+        <div class="score-sep"></div>
+        <div class="score-item">
+            <div class="score-label">Best</div>
+            <div class="score-val" id="valBest">0</div>
+        </div>
+    </div>
+
+    <div class="arena">
+        <div class="panel">
+            <div class="panel-label">Pattern</div>
+            <div class="grid" id="patternGrid"></div>
+        </div>
+        <div class="divider-v"></div>
+        <div class="panel">
+            <div class="panel-label">Your Draw</div>
+            <div class="grid player-grid disabled" id="playerGrid"></div>
+        </div>
+    </div>
+
+    <div class="timer-wrap" id="timerWrap">
+        <div class="timer-bar" id="timerBar"></div>
+    </div>
+
+    <div class="status" id="status">Press start to begin</div>
+
+    <div class="actions">
+        <button class="btn" id="startBtn" onclick="startGame()">Start</button>
+        <button class="btn btn-check hidden" id="checkBtn" onclick="checkAnswer()">Check</button>
+    </div>
+
+</div>
+
+<script>
+    const GRID  = 4;
+    const TOTAL = GRID * GRID;
+
+    const S = {
+        phase:      'idle',
+        round:      0,
+        pattern:    [],
+        player:     new Set(),
+        highScore:  parseInt(localStorage.getItem('mirror-hs') || '0'),
+        timer:      null,
+    };
+
+    /* ── Build grids ── */
+    const patternGridEl = document.getElementById('patternGrid');
+    const playerGridEl  = document.getElementById('playerGrid');
+
+    for (let i = 0; i < TOTAL; i++) {
+        const pc = document.createElement('div');
+        pc.className = 'cell';
+        pc.dataset.i = i;
+        patternGridEl.appendChild(pc);
+
+        const rc = document.createElement('div');
+        rc.className = 'cell';
+        rc.dataset.i = i;
+        rc.addEventListener('click', () => onPlayerCell(i));
+        playerGridEl.appendChild(rc);
+    }
+
+    function patCell(i) { return patternGridEl.querySelector(`[data-i="${i}"]`); }
+    function plyCell(i) { return playerGridEl.querySelector(`[data-i="${i}"]`); }
+
+    /* ── Helpers ── */
+    function setStatus(txt, cls = '') {
+        const el = document.getElementById('status');
+        el.textContent = txt;
+        el.className = 'status ' + cls;
+    }
+
+    function render() {
+        document.getElementById('valRound').textContent = S.round || '—';
+        document.getElementById('valBest').textContent  = S.highScore;
+    }
+
+    function patternSizeForRound(r) {
+        return Math.min(2 + r, TOTAL - 4);
+    }
+
+    function memorizeTimeForRound(r) {
+        return Math.max(1500, 4200 - r * 300);
+    }
+
+    function generatePattern(size) {
+        const pool = Array.from({ length: TOTAL }, (_, i) => i);
+        for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        return pool.slice(0, size);
+    }
+
+    function clearPatternGrid() {
+        for (let i = 0; i < TOTAL; i++)
+            patCell(i).className = 'cell';
+    }
+
+    function clearPlayerGrid() {
+        for (let i = 0; i < TOTAL; i++)
+            plyCell(i).className = 'cell';
+        S.player.clear();
+    }
+
+    function showTimer(duration) {
+        const wrap = document.getElementById('timerWrap');
+        const bar  = document.getElementById('timerBar');
+        wrap.classList.add('visible');
+        bar.style.transition = 'none';
+        bar.style.width = '100%';
+        void bar.offsetWidth;
+        bar.style.transition = `width ${duration}ms linear`;
+        bar.style.width = '0%';
+    }
+
+    function hideTimer() {
+        document.getElementById('timerWrap').classList.remove('visible');
+    }
+
+    /* ── Game flow ── */
+    function startGame() {
+        S.round = 0;
+        S.highScore = parseInt(localStorage.getItem('mirror-hs') || '0');
+        document.getElementById('startBtn').classList.add('hidden');
+        // Remove game over overlay if present
+        const go = document.getElementById('goOverlay');
+        if (go) go.remove();
+        render();
+        setTimeout(startRound, 300);
+    }
+
+    function startRound() {
+        S.round++;
+        render();
+        clearPatternGrid();
+        clearPlayerGrid();
+        playerGridEl.classList.add('disabled');
+        document.getElementById('checkBtn').classList.add('hidden');
+
+        S.pattern = generatePattern(patternSizeForRound(S.round));
+
+        // Show pattern with staggered ink-drop animation
+        S.pattern.forEach((idx, step) => {
+            setTimeout(() => {
+                patCell(idx).classList.add('lit');
+            }, step * 60);
+        });
+
+        const memorizeTime = memorizeTimeForRound(S.round);
+        const patternRevealTime = S.pattern.length * 60 + 100;
+
+        setStatus(`Memorise the pattern…`, 's-memorize');
+        setTimeout(() => showTimer(memorizeTime - patternRevealTime), patternRevealTime);
+
+        S.timer = setTimeout(() => {
+            startRecall();
+        }, memorizeTime);
+    }
+
+    function startRecall() {
+        // Hide pattern
+        clearPatternGrid();
+        hideTimer();
+
+        // Enable player grid
+        playerGridEl.classList.remove('disabled');
+        document.getElementById('checkBtn').classList.remove('hidden');
+
+        setStatus(`Draw the pattern from memory`, 's-recall');
+        S.phase = 'recall';
+    }
+
+    function onPlayerCell(i) {
+        if (S.phase !== 'recall') return;
+
+        if (S.player.has(i)) {
+            S.player.delete(i);
+            plyCell(i).className = 'cell';
+        } else {
+            S.player.add(i);
+            plyCell(i).className = 'cell player-lit';
+        }
+    }
+
+    function checkAnswer() {
+        if (S.phase !== 'recall') return;
+        S.phase = 'checking';
+
+        playerGridEl.classList.add('disabled');
+        document.getElementById('checkBtn').classList.add('hidden');
+
+        const patternSet  = new Set(S.pattern);
+        let correct = 0, wrong = 0, missed = 0;
+
+        // Evaluate player cells
+        S.player.forEach(i => {
+            if (patternSet.has(i)) {
+                correct++;
+                plyCell(i).className = 'cell correct';
+            } else {
+                wrong++;
+                plyCell(i).className = 'cell wrong';
+            }
+        });
+
+        // Show missed cells
+        S.pattern.forEach(i => {
+            if (!S.player.has(i)) {
+                missed++;
+                plyCell(i).className = 'cell missed';
+            }
+        });
+
+        const total = S.pattern.length;
+        const perfect = correct === total && wrong === 0;
+
+        if (perfect) {
+            setStatus(`Perfect! ${correct} / ${total}`, 's-correct');
+            setTimeout(startRound, 1200);
+        } else {
+            setStatus(`${correct} / ${total} correct`, 's-wrong');
+            setTimeout(showGameOver, 1400);
+        }
+    }
+
+    function showGameOver() {
+        const score  = S.round - 1;
+        const isNew  = score > S.highScore;
+        if (isNew) { S.highScore = score; localStorage.setItem('mirror-hs', score); }
+        render();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'go-overlay';
+        overlay.id = 'goOverlay';
+        overlay.innerHTML = `
+            <div class="go-label">Game Over</div>
+            <div class="go-score">${score}</div>
+            <div class="go-sub ${isNew ? 'new' : ''}">${isNew ? '★ New Record' : `Best: ${S.highScore}`}</div>
+            <button class="btn" onclick="startGame()">Play Again</button>
+        `;
+        document.body.appendChild(overlay);
+        setStatus('Game over', 's-wrong');
+        S.phase = 'idle';
+    }
+
+    /* ── Keyboard ── */
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            if (S.phase === 'idle') startGame();
+            else if (S.phase === 'recall') checkAnswer();
+        }
+    });
+
+    /* ── Init ── */
+    render();
+</script>
+</body>
+</html>
